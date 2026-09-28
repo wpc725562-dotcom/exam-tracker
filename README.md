@@ -1,37 +1,50 @@
-# exam-tracker · 备考任务追踪 API
+# exam-tracker · 备考任务追踪
 
-> 面向备考者的**学习管理 REST API**：科目 → 每日任务 → 学习打卡 → 进度统计，一条闭环。
-> 用 Spring Boot 3.5 / Java 17 从零手写，含 **217 个单元测试** 与 **86 项端到端断言**（全部实测通过）。
+> 面向备考者的**学习管理系统**：科目 → 每日任务 → 学习打卡 → 进度统计，一条闭环。
+> 用 Spring Boot 3.5 / Java 17 从零手写后端，**外加一个零依赖零构建的静态前端** ——
+> `./run.cmd` 一条命令起服务，浏览器打开就是能点的界面，不用配任何东西。
 
 <p>
 <img alt="Java" src="https://img.shields.io/badge/Java-17-007396">
 <img alt="Spring Boot" src="https://img.shields.io/badge/Spring%20Boot-3.5.14-6DB33F">
 <img alt="MySQL" src="https://img.shields.io/badge/MySQL-8.0-4479A1">
-<img alt="tests" src="https://img.shields.io/badge/tests-217%20passing-brightgreen">
+<img alt="frontend" src="https://img.shields.io/badge/frontend-0%20deps%20%2F%203%20files-4F46E5">
+<img alt="tests" src="https://img.shields.io/badge/unit%20tests-217%20passing-brightgreen">
 <img alt="e2e" src="https://img.shields.io/badge/e2e-86%2F86%20passing-brightgreen">
+<img alt="web" src="https://img.shields.io/badge/web%20contract-82%2F82%20passing-brightgreen">
+<img alt="render" src="https://img.shields.io/badge/render%20check-23%2F23%20passing-brightgreen">
+</p>
+
+**演示账号：`demo` / `demo123456`** —— 登录后看到的是 `sql/seed.sql` 灌入的 4 个科目、
+37 条任务、23 天打卡记录（相对今天计算，所以演示数据不会过期）。
+
+<p align="center">
+  <img src="docs/screenshots/03-dashboard-top.png" alt="仪表盘" width="820">
 </p>
 
 ---
 
 ## 日本語
 
-exam-tracker は、資格試験の受験者向けの**学習管理 API** です。科目・日次タスク・
-学習チェックイン・進捗統計を提供します。
+exam-tracker は、資格試験の受験者向けの**学習管理システム**です。科目・日次タスク・
+学習チェックイン・進捗統計を提供します。バックエンドは Spring Boot 3.5 / Java 17 で
+一から実装し、**依存ゼロ・ビルド不要の静的フロントエンド**を同梱しています。
 
 - **技術スタック**：Java 17 / Spring Boot 3.5 / Spring Security + JWT / Spring Data JPA / MySQL 8 / Springdoc OpenAPI
 - **設計方針**：すべてのクエリに `user_id` 条件を含めることで、ID を推測されても他人のデータに到達できないようにしています（IDOR 対策）
-- **品質**：単体テスト **217 件**、エンドツーエンド検証 **86 項目**をすべてパス（実測ログを本 README に掲載）
-- **同梱物**：Swagger UI（`/api/doc.html`）、建表 SQL（`sql/schema.sql`）、Dockerfile、docker-compose.yml
+- **品質**：単体テスト **217 件**、E2E 検証 **86 項目**、Web 契約検証 **82 項目**、描画セルフチェック **23 項目**をすべてパス（実測ログを本 README に掲載）
+- **同梱物**：ブラウザ UI、Swagger UI（`/api/doc.html`）、建表 SQL（`sql/schema.sql`）、デモデータ（`sql/seed.sql`）、Dockerfile、docker-compose.yml
 
 ## English
 
-exam-tracker is a **study-management REST API** for exam candidates: subjects, daily
-tasks, study check-ins and progress statistics.
+exam-tracker is a **study-management system** for exam candidates: subjects, daily
+tasks, study check-ins and progress statistics. The backend is written from scratch in
+Spring Boot 3.5 / Java 17, and ships with a **zero-dependency, zero-build static frontend**.
 
 - **Stack**: Java 17, Spring Boot 3.5, Spring Security + JWT, Spring Data JPA, MySQL 8, Springdoc OpenAPI
 - **Design**: every query is scoped by `user_id`, so guessing an ID never reaches another user's data (IDOR defence)
-- **Quality**: **217 unit tests** and **86 end-to-end assertions**, all passing (measured output included below)
-- **Ships with**: Swagger UI at `/api/doc.html`, DDL in `sql/schema.sql`, Dockerfile, docker-compose.yml
+- **Quality**: **217 unit tests**, **86 end-to-end assertions**, **82 web-contract assertions** and **23 render self-checks**, all passing (measured output included below)
+- **Ships with**: a browser UI, Swagger UI at `/api/doc.html`, DDL in `sql/schema.sql`, demo data in `sql/seed.sql`, Dockerfile, docker-compose.yml
 
 ---
 
@@ -50,7 +63,70 @@ tasks, study check-ins and progress statistics.
 
 ---
 
-## 2. 技术栈
+## 2. 界面
+
+界面是**三个静态文件**（`index.html` + `app.js` + `style.css`，共 1,299 行），
+由 Spring Boot 直接从 jar 里托管 —— **没有 Node、没有 npm、没有构建步骤、没有 CDN**。
+
+这不是为了炫技，是为了**能跑**：演示时经常没有稳定网络，用 CDN 图表库的话断网就是一片空白。
+所以连趋势图都是手写 SVG 画的（`renderTrend()`，约 60 行），不引任何图表库。
+
+### 2.1 登录
+
+<p align="center">
+  <img src="docs/screenshots/01-login.png" alt="登录页" width="600">
+</p>
+
+演示账号直接印在页面上（`demo` / `demo123456`），不用去翻文档找。
+
+### 2.2 仪表盘
+
+<p align="center">
+  <img src="docs/screenshots/03-dashboard-top.png" alt="仪表盘" width="860">
+</p>
+
+四个卡片回答四个问题：**今天完成了多少 / 连续打卡几天 / 一共投入多久 / 距考试还有几天**。
+
+第二张卡片的副标题里藏着对比信息 ——「历史最长 10 天 · 累计打卡 23 天」。
+当前 7 天、历史最长 10 天，差的那 3 天说明中间断过签。**这个对比是刻意留出来的**：
+种子数据里 D-7 那天只有「跳过」没有打卡，否则「历史最长」这个指标永远等于当前值，没有意义。
+
+### 2.3 任务列表
+
+<p align="center">
+  <img src="docs/screenshots/08-task-list.png" alt="任务列表" width="860">
+</p>
+
+每行是：复选框 · 标题 · **科目色点** · 计划日期 · 计划分钟 · 优先级 · 状态 · 备注。
+状态 tab 和科目下拉可以组合筛选（服务端筛选，不是前端过滤）。
+
+### 2.4 近 14 天投入趋势
+
+<p align="center">
+  <img src="docs/screenshots/06-trend-chart.png" alt="趋势图" width="860">
+</p>
+
+手写 SVG。两个细节：
+
+- **没打卡的那天画一个灰色小点**（图里的 09-21），而不是什么都不画 ——
+  否则柱子之间空一格，看起来像渲染失败而不是「那天没学」。
+- 后端只返回**有打卡的日期**，前端要补 0 成完整 14 天，不然不连续的日子会被画成连续的。
+
+### 2.5 四科看板
+
+<p align="center">
+  <img src="docs/screenshots/07-board.png" alt="四科看板" width="860">
+</p>
+
+每个科目一行：窗口内**实际 / 目标**分钟、达成率、任务完成率、最近打卡日。
+颜色和任务列表里的科目色点是同一套（存在 `subject.color` 里），所以两处天然一致。
+
+看板回答的是第 1 节那个问题 ——「**我是在进步还是在自我感动？**」
+比如图里英语 133 / 300 分钟（44%）而计算机 413 / 480（86%），偏科一眼可见。
+
+---
+
+## 3. 技术栈
 
 | 层 | 选型 | 说明 |
 |---|---|---|
@@ -60,20 +136,68 @@ tasks, study check-ins and progress statistics.
 | 数据库 | MySQL **8.0** | 表结构由 `sql/schema.sql` 管理，应用侧 `ddl-auto: validate` |
 | 安全 | Spring Security + **jjwt 0.12.6** | 无状态 JWT，BCrypt 存密码 |
 | 文档 | Springdoc OpenAPI **2.8.17** | Swagger UI：`/api/doc.html` |
+| 前端 | **原生 HTML + CSS + ES5 JavaScript** | 3 个文件 / 1,299 行，零依赖零构建 |
 | 测试 | JUnit 5 + Mockito + AssertJ + MockMvc | 217 个用例 |
 | 构建 | Maven（`./mvnw`，无需预装） | 打包出可执行 fat jar |
 
-规模：**50 个主源文件 / 3,848 行**，**16 个测试文件 / 3,808 行**（测试与主代码接近 1:1）。
+规模：**50 个主源文件 / 3,862 行**，**16 个测试文件 / 3,808 行**（测试与主代码接近 1:1），
+**3 个前端文件 / 1,299 行**。
 
 ---
 
-## 3. 快速开始
+## 4. 快速开始
 
-### 3.1 本地直接跑（推荐，本机实测过）
+### 4.1 一条命令（推荐）
+
+Windows —— 双击 `run.cmd`，或在终端里：
+
+```cmd
+run.cmd
+```
+
+Linux / macOS：
+
+```bash
+./run.sh
+```
+
+两个脚本逻辑一致，会依次：检查 Java → 找（或构建）jar → 探测 MySQL 端口 →
+按需建库并灌入演示数据 → 启动。每一步都打印在做什么，**失败会明确告诉你卡在哪一步**，
+不会静默跳过。
+
+| 参数 | 作用 |
+|---|---|
+| （无） | 有 jar 就直接用；没有才构建。数据库不可达时会问你要不要建 |
+| `init` | 建库 + 灌 `sql/seed.sql` 演示数据，然后退出（不启动） |
+| `skip` | 跳过所有数据库检查，直接用现有 jar 启动（改代码时最快） |
+
+启动后终端会打印：
+
+```
+Starting exam-tracker ...
+
+  Web UI  : http://127.0.0.1:8090/api/
+  API doc : http://127.0.0.1:8090/api/doc.html
+  Login   : demo / demo123456
+
+  Press Ctrl+C to stop.
+```
+
+**打开 <http://127.0.0.1:8090/api/> 就是第 2 节那个界面**，用 `demo` / `demo123456` 登录。
+
+> `run.cmd` 是**纯 ASCII** 的，这不是洁癖：`cmd.exe` 用 OEM 代码页（中文 Windows 是 GBK）
+> 读 `.cmd` 文件，UTF-8 中文注释会被错误解码，乱码字节可能从 `REM` 行里漏出来被当成命令执行 ——
+> 结果是**启动其实成功了，但屏幕上蹦出「不是内部或外部命令」**，让人去找一个根本不存在的 bug。
+> 所以里面只有英文注释，文件末尾也是 CRLF 而不是 LF。
+
+### 4.2 手动三步
 
 ```bash
 # 1) 建库建表（幂等，可重复执行）
 mysql -h 127.0.0.1 -P 3308 -uroot -p < sql/schema.sql
+
+# 1b) 灌演示数据（可选，但强烈建议 —— 空库打开界面什么都看不到）
+mysql -h 127.0.0.1 -P 3308 -uroot -p exam_tracker < sql/seed.sql
 
 # 2) 打包（会先跑 217 个单元测试）
 ./mvnw package
@@ -92,16 +216,45 @@ Started ExamTrackerApplication in 6.391 seconds (process running for 6.848)
 验证：
 
 ```bash
-curl http://127.0.0.1:8090/api/health
+curl --noproxy '*' http://127.0.0.1:8090/api/health
 # {"status":"ok"}
 ```
 
-打开 <http://127.0.0.1:8090/api/doc.html> 是 Swagger UI。
+> `--noproxy '*'` 不是多余的：本机开发环境有系统代理，它会把 `127.0.0.1` 的请求也劫持走，
+> 表现为 curl 超时 —— 看起来像服务没起来，其实起来了。
 
-**默认连的数据库**：`127.0.0.1:3308/exam_tracker`，账号 `dev` / `dev123456`。
-不一样就用环境变量覆盖（见下表），**不需要改配置文件**。
+### 4.3 演示数据（`sql/seed.sql`）
 
-### 3.2 全部可覆盖的环境变量
+`demo` 账号看到的所有内容都来自这个脚本。它有两个设计要点：
+
+**① 用 `CURDATE()` 相对计算，不写死日期。** 写死「2026-09-28」的话，
+过几天再演示，界面上全是「过期任务」，「今日完成率」也永远是 0。所以种子数据全部相对今天生成。
+
+**② 幂等，可以反复灌。** 靠的是 `app_user` 上的 `ON DELETE CASCADE`：
+先删 `demo` 用户，级联带走他的科目 / 任务 / 打卡，再重新插入。
+
+这里踩过一个坑：最初用 `MOD(t.id, 5)` 当「实际时长」的扰动系数，结果**重灌后数字会漂**
+（1916 → 1912 → 1921）—— 因为 `id` 是自增的，重灌之后整体后移了。改成
+`MOD(DAYOFYEAR(plan_date) + plan_minutes, 5)` 之后，连跑三次都是同一个数字。
+
+灌完后的自检输出（连跑三次完全一致）：
+
+| 指标 | 值 |
+|---|---:|
+| 科目数 | 4 |
+| 任务总数 | 37 |
+| 已完成 | 27 |
+| 打卡记录 | 37 |
+| 打卡天数 | 23 |
+| 累计投入分钟 | 1905 |
+| 当前连续打卡 | 7 天 |
+| 历史最长连续 | 10 天 |
+
+**当前 7 天 / 历史最长 10 天不是巧合**：种子数据里 D-7 那天只标了「跳过」没有打卡，
+刻意留出一个断签，否则「历史最长」永远等于当前值，这个指标就没有对比意义了。
+更早的打卡里也留了 D-15 / D-14 两天空档。
+
+### 4.4 全部可覆盖的环境变量
 
 | 变量 | 默认值 | 用途 |
 |---|---|---|
@@ -116,11 +269,15 @@ curl http://127.0.0.1:8090/api/health
 | `LOG_LEVEL` | `INFO` | 应用日志级别 |
 | `DB_POOL_SIZE` | `10` | Hikari 连接池上限 |
 
-### 3.3 Docker
+> ⚠️ 有一个坑：**环境变量优先级低于命令行参数，但高于 `application.yml` 里的默认值**。
+> 如果 shell 里已经存在一个 `SERVER_PORT`（或 Spring 的 `SERVER__PORT`），它会覆盖 yml，
+> 应用就跑到别的端口上去了。排查时用 `--server.port=8090` 显式指定，命令行参数优先级最高。
+
+### 4.5 Docker
 
 ```bash
 docker compose up -d --build
-curl http://127.0.0.1:8090/api/health
+curl --noproxy '*' http://127.0.0.1:8090/api/health
 ```
 
 compose 会另起一个 MySQL（映射到宿主机的 **13308**，不和工作区的 3308 撞），
@@ -129,11 +286,11 @@ compose 会另起一个 MySQL（映射到宿主机的 **13308**，不和工作�
 > ⚠️ **诚实声明**：`Dockerfile` 与 `docker-compose.yml` **没有在真实 Docker 上构建验证过** ——
 > 开发机的 Docker 起不来（`hypervisorlaunchtype=Off`，见工作区 `docs/runtime.md`）。
 > 文件内容是按官方文档写的，但「能跑」请以你自己 `docker compose up` 的结果为准。
-> 本 README 里所有「实测」字样指的都是 **3.1 的本地 jar 路线**。
+> 本 README 里所有「实测」字样指的都是 **4.1 / 4.2 的本地 jar 路线**。
 
 ---
 
-## 4. API 一览
+## 5. API 一览
 
 统一前缀 `/api`（`server.servlet.context-path`），**14 个路径 / 22 个操作**。
 
@@ -200,9 +357,13 @@ compose 会另起一个 MySQL（映射到宿主机的 **13308**，不和工作�
 
 ---
 
-## 5. 架构与分层
+## 6. 架构与分层
 
 ```
+浏览器 ──▶ static/ 三个文件（index.html + app.js + style.css）
+   │             零依赖、零构建，手写 SVG 图表
+   │ fetch('/api/...')，带 Bearer token
+   ▼
 HTTP ──▶ JwtAuthenticationFilter ──▶ Controller ──▶ Service ──▶ Repository ──▶ MySQL
               （验签 → UserPrincipal）     DTO         业务规则       Specification
                                             │             │
@@ -225,13 +386,27 @@ com.wpc725562.examtracker
 错误只用 `BusinessException(ErrorCode, message)` 表达，状态码由 `GlobalExceptionHandler` 统一决定。
 这样 Service 才好写单元测试（本项目 Service 层的测试全部不启动 Spring 容器）。
 
+前端不在这个包里 —— 它是 `src/main/resources/static/` 下的三个普通文件，
+被打进 jar 的 `BOOT-INF/classes/static/`。
+
+**前端与后端同源部署**，这是一个刻意的取舍：
+
+- **好处**：没有跨域问题，不用维护两套启动流程，演示时只有一条命令。
+- **代价**：改了前端要重新打包（或者手动把文件拷进 `target/classes/static/`）。
+  如果想让前端独立开发，`CORS_ALLOWED_ORIGINS` 已经预留好了（默认放行 `localhost:5173` / `3000`）。
+
+> 顺带一个踩过的坑：静态资源必须加进 `SecurityConfig` 的 `PUBLIC_PATHS`，
+> 而且写的是**去掉 context-path 之后的路径**（`/`、`/app.js`、`/style.css`，不是 `/api/app.js`）——
+> 因为 `requestMatchers` 匹配的是 DispatcherServlet 拿到的那个路径。
+> 忘了放行的话，**登录页本身会被 401 挡掉**，现象是「整个页面打不开」而不是「登录失败」。
+
 ---
 
-## 6. 关键设计决定
+## 7. 关键设计决定
 
 这一节是面试里真正能展开的部分 —— 每条都是「不这么做会出什么问题」。
 
-### 6.1 数据模型
+### 7.1 数据模型
 
 | 决定 | 为什么 |
 |---|---|
@@ -243,7 +418,7 @@ com.wpc725562.examtracker
 | **日期用 `DATE` 而不是时间戳** | 任务是按「天」规划的，带上时分秒只会引入时区歧义 |
 | **枚举以字符串存**（`status` / `priority`） | 存序号的话，将来在枚举中间插一个值，历史数据全部错位 |
 
-### 6.2 安全
+### 7.2 安全
 
 | 决定 | 为什么 |
 |---|---|
@@ -258,7 +433,7 @@ com.wpc725562.examtracker
 | **JWT 只放 `sub` / `username`**，密钥短于 32 字节**启动即失败** | JWT 是 Base64 编码不是加密，任何人都能解开看；配置错了应该在部署那一刻就暴露 |
 | **默认只绑 `127.0.0.1`** | 不写 `server.address` 时 Spring Boot 绑 `0.0.0.0`（所有网卡），配上开发用的弱口令，同网段任何设备都能连进来 |
 
-### 6.3 正确性
+### 7.3 正确性
 
 | 决定 | 为什么 |
 |---|---|
@@ -275,7 +450,7 @@ com.wpc725562.examtracker
 | **`@Validated` 加在 Controller 类上** | 少了它，`@RequestParam` 上的 `@Min` / `@Max` 不会被 AOP 拦截，`size=99999` 会静默通过 |
 | **`-parameters` 编译参数显式写进 pom** | 少了它，`@RequestParam` 不写 `name` 就会在**运行时**抛「Name for argument not specified」 |
 
-### 6.4 可运维性
+### 7.4 可运维性
 
 | 决定 | 为什么 |
 |---|---|
@@ -288,9 +463,9 @@ com.wpc725562.examtracker
 
 ---
 
-## 7. 测试与验证
+## 8. 测试与验证
 
-### 7.1 单元测试：217 个，全部通过
+### 8.1 单元测试：217 个，全部通过
 
 ```bash
 ./mvnw test
@@ -331,7 +506,7 @@ com.wpc725562.examtracker
    - `JwtServiceTest.tokenCarriesNoSensitiveClaims` —— 断言 claims 只有 5 个键。
      以后有人想「顺手把邮箱塞进 token 省一次查询」时，测试会立刻变红。
 
-### 7.2 端到端验证：86 项断言，全部通过
+### 8.2 端到端验证：86 项断言，全部通过
 
 `tools/p4-e2e-test.py` 对**真实运行的实例 + 真实 MySQL** 发起 HTTP 请求，
 分 9 组共 86 项断言：
@@ -369,20 +544,135 @@ com.wpc725562.examtracker
 > 说明：脚本在开发机上用 `http.client` 直连回环地址，绕过系统代理
 > （系统代理会劫持 `127.0.0.1` 的请求，`curl` 也需要 `--noproxy '*'`）。
 
+### 8.3 前端契约验证：82 项断言，全部通过
+
+```bash
+python tools/p4-web-e2e.py
+```
+
+**为什么和 8.2 分开写：两者的失败模式完全不同。** 8.2 验的是「后端行为对不对」，
+这一份验的是「**前端会不会白屏**」。
+
+举个具体的：8.2 会测「`PATCH /tasks/{id}` 改状态返回 200 且 `completedAt` 被写上」；
+8.3 会测「列表接口返回的每条任务都带 `subjectName` 字段」——
+因为任务行要显示科目名，后端如果只回 `subjectId`，前端就渲染成 `undefined`，
+而**接口返回 200，8.2 那 86 项全绿，页面却是坏的**。
+
+分 8 组共 82 项：
+
+| 组 | 内容 | 前端为什么依赖它 |
+|---|---|---|
+| 1 | 静态资源匿名可达 | 登录页自己必须能匿名打开，否则用户根本没机会输入账号密码 |
+| 2 | 认证 | 登录 / 注册 / `me` 的响应字段 |
+| 3 | 科目 | 「新建任务」表单的科目下拉数据源 |
+| 4 | 任务 | 列表字段齐全（含 `subjectName`）、状态筛选真的生效 |
+| 5 | 仪表盘总览 | 四个卡片读的 15 个字段 |
+| 6 | 四科看板 | 看板行的 12 个字段 |
+| 7 | 打卡趋势 | 柱状图的数据源 |
+| 8 | 写操作 | 状态流转 + 复原、404 / 400 边界 |
+
+实测输出（节选）：
+
+```
+[7] 打卡趋势（柱状图数据源）
+  [PASS] 返回按天汇总的数组
+  [PASS] 每条含 date
+  [PASS] 每条含 minutes
+  [PASS] 日期都在请求区间内
+
+[8] 写操作（状态流转 + 复原）
+  [PASS] PATCH 标记完成返回 200
+  [PASS] completedAt 被写上
+  [PASS] 改回 TODO 后 completedAt 被清空
+  [PASS] 改不存在的任务返回 404
+  [PASS] 非法计划时长（0）返回 400
+
+====================================================================
+ 结果：82 通过 / 0 失败
+====================================================================
+```
+
+> 组 1 那条不是凑数的。静态资源如果不加进 Spring Security 的放行列表，
+> **登录页本身会被 401 挡掉** —— 用户看到的现象是「整个页面打不开」而不是「登录失败」，
+> 极易被误判成前端写坏了。这个坑真踩过。
+
+### 8.4 渲染自检：23 项断言 + 8 张截图
+
+```bash
+NODE_PATH=<node-workspace>/node_modules node tools/screenshot.js
+```
+
+用系统 Chrome（headless）打开页面，**既截图也断言**。截图就是第 2 节用的那 8 张。
+
+**为什么需要它**：静态前端最容易出的问题不是「报错」而是**白屏** ——
+HTTP 200、静态资源也全 200，但 JS 里一个选择器写错、一个字段名对不上，整页就是一片空白，
+**而所有网络层检查全是绿的**。只看 curl 的状态码完全发现不了。
+
+所以它断言的是「渲染真的发生了」：
+
+```
+[3] 主界面渲染完整性（白屏检测）
+  [PASS] 概览卡片 4 张  (4 张)
+  [PASS] 卡片都有实际高度（未塌陷）  ([146,146,146,146])
+  [PASS] 卡片数值都已填充（无残留 "—"）  (50% / 7天 / 31.8小时 / 167天)
+  [PASS] 任务列表有内容  (37 行)
+  [PASS] 趋势图 SVG 已渲染  (1 个 <svg>)
+  [PASS] 趋势图有柱体  (26 个 <rect>)
+  [PASS] 四科看板有内容  (4 行)
+  [PASS] 右上角显示当前用户  (演示用户)
+
+[4] 任务面板（tab 切换 + 新建表单）
+  [PASS] 筛选真的生效了（行数变化）  (全部 37 → 已完成 27)
+
+[6] 运行时健康度
+  [PASS] 无未捕获的 JS 异常
+  [PASS] 无 console.error
+
+====================================================================
+ 结果：23 通过 / 0 失败
+====================================================================
+```
+
+四个刻意的设计：
+
+- **检查元素高度**（`[146,146,146,146]`）而不只是「元素存在」。元素存在但高度为 0，用户看到的还是空白。
+- **检查数值不是 `—`**。模板里的占位符是 `—`，接口挂了页面会一直显示 `—` 而**不会报错**。
+- **监听 `pageerror` 与 `console.error`**。未捕获异常在 headless 里是静默的，不监听就等于没测。
+- **崩溃时自动存 `99-failure.png`**。白屏排查最需要的就是「崩的那一刻长什么样」。
+
+### 8.5 四类验证的关系
+
+| 脚本 | 断言数 | 验证什么 | 失败时说明 |
+|---|---:|---|---|
+| `./mvnw test` | 217 | 类与方法的行为契约 | 后端逻辑错了 |
+| `tools/p4-e2e-test.py` | 86 | 真实实例 + 真实 MySQL 的端到端语义 | 集成层面错了 |
+| `tools/p4-web-e2e.py` | 82 | 前端依赖的接口契约 | 前端会拿到坏数据 |
+| `tools/screenshot.js` | 23 | 页面真的渲染出来了 | 前端会白屏 |
+
+**合计 408 项断言，全部通过。** 四者互相不可替代：一个接口可以「单测全绿 + 端到端全绿」
+但前端仍然白屏（字段名对不上），也可以「接口契约全绿」但后端逻辑错（两端一起错）。
+
 ---
 
-## 8. 项目结构
+## 9. 项目结构
 
 ```
 exam-tracker/
+├── run.cmd / run.sh              # 一条命令启动（Windows / Linux·macOS）
 ├── pom.xml
-├── Dockerfile                    # 多阶段构建（未在真实 Docker 上验证，见 3.3）
+├── Dockerfile                    # 多阶段构建（未在真实 Docker 上验证，见 4.5）
 ├── docker-compose.yml            # app + mysql 一键起（同上）
 ├── .dockerignore
+├── docs/
+│   └── screenshots/              # README 第 2 节用的 8 张截图
 ├── sql/
-│   └── schema.sql                # 幂等建库建表 + 自检查询
+│   ├── schema.sql                # 幂等建库建表 + 自检查询
+│   └── seed.sql                  # 演示数据（相对今天生成、可重复灌）
 ├── tools/
-│   └── p4-e2e-test.py            # 端到端验证脚本（86 项断言）
+│   ├── p4-e2e-test.py            # 端到端验证（86 项断言）
+│   ├── p4-web-e2e.py             # 前端契约验证（82 项断言）
+│   ├── screenshot.js             # 渲染自检 + 截图（23 项断言）
+│   └── GenBcrypt.java            # 用项目自己的编码器生成 BCrypt 哈希
 └── src/
     ├── main/
     │   ├── java/com/wpc725562/examtracker/
@@ -397,13 +687,29 @@ exam-tracker/
     │   │   ├── security/         # JwtService JwtAuthenticationFilter UserPrincipal …
     │   │   └── service/          # 5 个 Service + StreakCalculator + TaskSpecifications
     │   └── resources/
-    │       └── application.yml   # 全部可覆盖项都写成 ${ENV:default}
+    │       ├── application.yml   # 全部可覆盖项都写成 ${ENV:default}
+    │       └── static/           # 前端：index.html + app.js + style.css
     └── test/java/…               # 16 个测试类 / 217 个用例
 ```
 
+### 关于 `tools/GenBcrypt.java`
+
+种子数据里 `demo` 的密码哈希是用**项目自己的 `BCryptPasswordEncoder`** 生成的，
+不是外部的 bcrypt 命令行工具。理由很朴素：让「生成哈希的实现」和「校验哈希的实现」
+是同一个，就不存在两边对不上的可能。
+
+它会**先自检再输出** —— `encode()` 返回 `null`，或者刚生成的哈希 `matches()` 不通过，
+就直接抛异常、进程非 0 退出，免得把坏哈希写进 `sql/seed.sql`。
+
+> 这里踩过一个值得记的坑：最初用 `jshell` 生成，classpath 里缺 `commons-logging` 时
+> `new BCryptPasswordEncoder()` 会抛 `NoClassDefFoundError`，但 **jshell 只把错误打印出来、
+> 然后继续往下执行** —— `hash` 保持 `null`，而脚本最后那行 `SELFCHECK=OK` 照样打印出来。
+> 一个彻头彻尾的**假绿**。改成编译执行（`java -cp … tools/GenBcrypt.java`）之后，
+> 异常会让进程真的非 0 退出，这种错误就不可能被漏掉。
+
 ---
 
-## 9. 已知限制与下一步
+## 10. 已知限制与下一步
 
 **明确的限制（不是「以后再说」，是现在就没做）：**
 
@@ -415,17 +721,26 @@ exam-tracker/
 - 没有集成测试（`*IT.java`）。当前 `surefire` 显式排除了它们，
   端到端验证靠 `tools/p4-e2e-test.py` 这个外部脚本承担 —— 好处是不依赖 Testcontainers，
   代价是它不在 `mvn verify` 里，需要单独跑。
-- 没有前端。本项目只提供 API，Swagger UI 可以用来手工验证。
+- **前端没有覆盖交互逻辑的自动化测试**。`tools/screenshot.js` 验的是「页面渲染出来了」，
+  验不了「点这个按钮应该发生什么」—— 状态流转、筛选、新建表单这些交互目前只在
+  接口层面被 `tools/p4-web-e2e.py` 间接覆盖，浏览器里真的点一遍还得靠人。
+- 前端是手写 ES5，没有构建步骤也就没有类型检查、没有模块打包。
+  代价是 `app.js` 613 行集中在一个文件里，再长就该拆了。
+- 任务列表一次加载全部（37 条），没有分页。后端接口是支持分页的，
+  前端为了简单没用 —— 任务到几百条时需要补上。
 
 **下一步（按性价比排序）：**
 
 1. 用 Testcontainers 把 `p4-e2e-test.py` 的断言搬进 `*IT.java`，让 `mvn verify` 一次跑完
-2. 加 GitHub Actions：`mvn verify` + 端到端脚本
-3. 统计接口加缓存（先测量，再优化）
+2. 加 GitHub Actions：`mvn verify` + 三个验证脚本
+3. 前端补交互测试（Playwright 的 `@playwright/test` 可以直接复用
+   `tools/screenshot.js` 里那段登录流程）
+4. 任务列表接上后端已有的分页参数
+5. 统计接口加缓存（先测量，再优化）
 
 ---
 
-## 10. 作者
+## 11. 作者
 
 **wpc725562-dotcom** · AI Agent 开发者
 仓库：<https://github.com/wpc725562-dotcom>

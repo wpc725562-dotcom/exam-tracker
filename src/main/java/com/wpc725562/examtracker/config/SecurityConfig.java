@@ -40,10 +40,24 @@ public class SecurityConfig {
      * <p>只放开**注册和登录**两个业务接口，以及文档、健康检查。
      * 其余一律 {@code authenticated()} —— 默认拒绝比默认放行安全，
      * 新加接口时忘了配权限的后果是「访问不了」，而不是「谁都能访问」。
+     *
+     * <p>静态前端资源（{@code index.html} / {@code app.js} / {@code style.css}）
+     * 也必须放行：它们是**登录页本身**。不放行的话，浏览器打开首页会先被 401 挡住，
+     * 用户根本没有机会输入账号密码 —— 表现为「整个页面打不开」，
+     * 而不是「登录失败」，很容易误判成前端写坏了。
+     *
+     * <p>注意这些路径都**不带 {@code /api} 前缀**：{@code requestMatchers} 匹配的是
+     * 去掉 context-path 之后的部分（同本类开头的说明）。
      */
     private static final String[] PUBLIC_PATHS = {
             "/auth/register",
             "/auth/login",
+            // 静态前端 —— 登录页自己必须能匿名打开
+            "/",
+            "/index.html",
+            "/app.js",
+            "/style.css",
+            "/favicon.ico",
             // 存活探针
             "/health",
             // 接口文档
