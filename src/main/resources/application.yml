@@ -1,0 +1,144 @@
+# =============================================================================
+#  exam-tracker —— 备考任务追踪 API
+#  ---------------------------------------------------------------------------
+#  配置原则：**所有会随环境变化的值都写成 `${环境变量:默认值}`**。
+#  这样同一份 jar 既能本地跑（用默认值），也能在 Docker / CI 里靠环境变量覆盖，
+#  不需要为每个环境维护一份 yml，也不会把生产密码写进仓库。
+#
+#  本地开发直接用默认值即可，无需任何额外配置。
+# =============================================================================
+
+server:
+  port: ${SERVER_PORT:8090}
+  # ★ 默认只绑回环地址。
+  #
+  #   Spring Boot 不写 server.address 时绑的是 0.0.0.0 —— 也就是**监听所有网卡**。
+  #   本地开发配的是弱口令的 MySQL 和「开发默认」的 JWT 密钥，
+  #   同一个 Wi-Fi 下的任何设备都能直接打进来。开发用不到「别的机器能连」，
+  #   所以默认收紧；确实要对外暴露时显式覆盖：
+  #     - 本机局域网调试：SERVER_ADDRESS=0.0.0.0
+  #     - Docker：容器内必须绑 0.0.0.0，否则端口映射进不来
+  #       （compose 里已经设好了，见 docker-compose.yml）
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  servlet:
+    context-path: /api
+  # 优雅停机：收到 SIGTERM 后先把手上的请求处理完再退出。
+  # 不加这个，Docker 里 `docker stop` 会直接掐断正在处理的请求。
+  shutdown: graceful
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: exam-tracker
+
+  autoconfigure:
+    # 排掉 Spring Security 的「默认内存用户」自动配置。
+    #
+    # 只要 classpath 上有 spring-boot-starter-security 而没有自定义
+    # UserDetailsService，它就会生成一个用户名为 user、密码随机并**打印在启动日志里**
+    # 的内存账号。本项目全程用 JWT 认证，这个账号完全用不上，
+    # 留着只会：① 启动日志里多一段吓人的随机密码；② 多一个没人记得但确实存在的登录入口。
+    # 用不到的默认行为要显式关掉，而不是当没看见。
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3308}/${DB_NAME:exam_tracker}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: ${DB_USERNAME:dev}
+    password: ${DB_PASSWORD:dev123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: exam-tracker-pool
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: 2
+      connection-timeout: 10000
+      # 让连接在数据库侧也被验证，避免 MySQL 8 小时空闲断连后拿到坏连接
+      validation-timeout: 3000
+
+  jpa:
+    # 表结构由 sql/schema.sql 管理，应用启动时只**校验**不改动。
+    # 用 validate 而不是 update：实体和表对不上时立刻启动失败，
+    # 而不是悄悄帮你改表 —— 后者在生产上是灾难。
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false          # 关掉 OSIV，避免懒加载在视图层偷偷查库
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Shanghai
+          batch_size: 30
+        order_inserts: true
+        order_updates: true
+
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+
+  # 统一 404 的表现形式，别让 Spring 默认的 Whitelabel 页面漏出去
+  mvc:
+    problemdetails:
+      enabled: false
+
+# -----------------------------------------------------------------------------
+#  应用自身的配置
+# -----------------------------------------------------------------------------
+app:
+  jwt:
+    # ⚠️ 生产环境必须用环境变量覆盖。这里给的是一个「本地开发默认值」，
+    #    长度 64 字节 > HS256 要求的 32 字节下限。
+    #    换生产值时用：openssl rand -base64 48
+    secret: ${JWT_SECRET:ZGV2LW9ubHktc2VjcmV0LWRvLW5vdC11c2UtaW4tcHJvZHVjdGlvbi0wMTIzNDU2Nzg5YWJjZGVm}
+    expire-minutes: ${JWT_EXPIRE_MINUTES:720}
+    issuer: exam-tracker
+  cors:
+    # 逗号分隔。前端跑在 5173（Vite 默认）或 3000（很多模板用这个）时都能连。
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+# -----------------------------------------------------------------------------
+#  接口文档：/api/doc.html
+# -----------------------------------------------------------------------------
+springdoc:
+  swagger-ui:
+    path: /doc.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+    display-request-duration: true
+  api-docs:
+    path: /v3/api-docs
+  default-produces-media-type: application/json
+
+# -----------------------------------------------------------------------------
+#  健康检查：只暴露 health / info，别把 env、beans 这些漏出去
+# -----------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    root: INFO
+    com.wpc725562.examtracker: ${LOG_LEVEL:INFO}
+    # 打开下面这行能看到每条 SQL 和参数（排查 N+1 时很有用）
+    # org.hibernate.SQL: DEBUG
+  # ★ 显式指定 UTF-8。
+  #   JDK 17 在中文 Windows 上默认编码是 GBK，日志里的中文会变成「δԤ���쳣」这种乱码 ——
+  #   而且**不会报错**，只是把排错时最有用的那部分信息毁掉。
+  #   （JDK 18 起 file.encoding 才默认 UTF-8，本项目是 17，所以要自己钉。）
+  charset:
+    console: UTF-8
+    file: UTF-8
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"

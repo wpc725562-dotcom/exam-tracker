@@ -1,0 +1,26 @@
+# 换行符统一策略。
+#
+# 为什么要显式写：Git 的 `core.autocrlf` 在 Windows 上默认是 true，
+# 而 CI（Linux）和 Docker（Linux）上不是。不钉死的话会出现
+# 「本地没事、CI 里 diff 出一堆 ^M」或者「shell 脚本在容器里报 bad interpreter」。
+#
+# 规则：仓库里一律存 LF；只有 Windows 批处理必须是 CRLF。
+
+* text=auto eol=lf
+
+# Windows 批处理：cmd.exe 对 LF-only 的 .bat/.cmd 容错很差（尤其带 goto/label 时）
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# 二进制：不要让 Git 碰它们
+*.jar binary
+*.png binary
+*.jpg binary
+*.ico binary
+
+# 行尾敏感的文件显式标记为文本
+Dockerfile text
+.dockerignore text
+.gitignore text
+.gitattributes text
+*.sh text eol=lf

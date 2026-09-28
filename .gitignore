@@ -1,0 +1,30 @@
+# ---- 构建产物 ----
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.settings/
+.project
+.classpath
+
+# ---- 日志与临时文件 ----
+*.log
+logs/
+tmp/
+
+# ---- 本地环境 ----
+# 只用于本地覆盖配置，绝不提交
+application-local.yml
+application-local.properties
+.env
+.env.*
+
+# ---- 操作系统 ----
+.DS_Store
+Thumbs.db
+desktop.ini

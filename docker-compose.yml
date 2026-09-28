@@ -1,0 +1,91 @@
+# =============================================================================
+#  exam-tracker —— 一键起「MySQL + 应用」
+#  ---------------------------------------------------------------------------
+#  用法：
+#    docker compose up -d --build
+#    curl http://127.0.0.1:8090/api/health
+#    # 接口文档： http://127.0.0.1:8090/api/doc.html
+#    docker compose down          # 停掉（保留数据）
+#    docker compose down -v       # 连数据一起删
+#
+#  和「本地直接跑 jar」的区别：
+#    本地路线用工作区已有的 MySQL 3308；这里会**另起一个** MySQL，
+#    映射到宿主机的 13308，避免和 3308 撞。
+#
+#  ⚠️ 本文件**尚未在真实 Docker 上验证过**（开发机 Docker 起不来，
+#     原因见工作区 docs/runtime.md）。做法按官方文档写，
+#     但「能跑」请以你自己 `docker compose up` 的结果为准。
+# =============================================================================
+
+name: exam-tracker
+
+services:
+  # ---------------------------------------------------------------------------
+  #  MySQL 8.0
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: exam-tracker-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      # 下面这两个让 entrypoint 顺手建好库和业务账号，
+      # 省掉「先手动执行一遍建库语句」这一步。
+      MYSQL_DATABASE: exam_tracker
+      MYSQL_USER: dev
+      MYSQL_PASSWORD: dev123456
+      TZ: Asia/Shanghai
+    command:
+      # 显式指定字符集/时区，不依赖镜像默认值 ——
+      # 否则中文会存成问号，DATETIME 会按 UTC 存，两边对不上。
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # schema.sql 是幂等的（全部 IF NOT EXISTS），
+      # MySQL 只在**数据目录为空**时执行 initdb 里的脚本，所以不会重复建表。
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      # ★ 只绑回环。写 "13308:3306" 等于把数据库暴露给同一网段的所有设备，
+      #   而这里的密码是开发用的弱口令。
+      - "127.0.0.1:13308:3306"
+    healthcheck:
+      # 应用依赖 condition: service_healthy，所以这个探针必须真的能反映
+      # 「已经可以接受连接」。mysqladmin ping 在初始化阶段就会失败，正好合适。
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot123456"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  #  应用
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: exam-tracker-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # 容器之间用服务名互相访问，不用 127.0.0.1（那是容器自己）
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: exam_tracker
+      DB_USERNAME: dev
+      DB_PASSWORD: dev123456
+      # ★ 容器内必须绑 0.0.0.0，否则 -p 端口映射进不来
+      #   （应用默认 127.0.0.1，是给本地开发用的）
+      SERVER_ADDRESS: 0.0.0.0
+      # ⚠️ 生产环境请务必用环境变量覆盖：
+      #      JWT_SECRET="$(openssl rand -base64 48)" docker compose up -d
+      JWT_SECRET: ${JWT_SECRET:-ZGV2LW9ubHktc2VjcmV0LWRvLW5vdC11c2UtaW4tcHJvZHVjdGlvbi0wMTIzNDU2Nzg5YWJjZGVm}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "127.0.0.1:8090:8090"
+    restart: unless-stopped
+
+volumes:
+  mysql-data:

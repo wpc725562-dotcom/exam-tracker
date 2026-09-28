@@ -1,0 +1,30 @@
+# 构建上下文里不需要的东西。
+# 少传 = 构建更快、镜像更小，也不会把本地状态（编译产物、IDE 配置、密钥文件）带进镜像。
+
+# 编译产物：镜像里会重新构建，本地这份没用（而且可能过期）
+target/
+
+# 版本控制与 IDE
+.git/
+.gitignore
+.gitattributes
+.idea/
+.vscode/
+*.iml
+
+# 本地日志、临时文件
+*.log
+logs/
+tmp/
+
+# 文档与开发工具：运行镜像里不需要
+docs/
+tools/
+README.md
+
+# ★ 任何形态的密钥文件都不许进构建上下文
+.env
+.env.*
+*.pem
+*.key
+*.jks
