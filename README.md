@@ -9,7 +9,9 @@
 <img alt="Spring Boot" src="https://img.shields.io/badge/Spring%20Boot-3.5.14-6DB33F">
 <img alt="MySQL" src="https://img.shields.io/badge/MySQL-8.0-4479A1">
 <img alt="frontend" src="https://img.shields.io/badge/frontend-0%20deps%20%2F%203%20files-4F46E5">
+<img alt="CI" src="https://github.com/wpc725562-dotcom/exam-tracker/actions/workflows/ci.yml/badge.svg">
 <img alt="tests" src="https://img.shields.io/badge/unit%20tests-217%20passing-brightgreen">
+<img alt="integration" src="https://img.shields.io/badge/integration%20tests-29%20passing-brightgreen">
 <img alt="e2e" src="https://img.shields.io/badge/e2e-86%2F86%20passing-brightgreen">
 <img alt="web" src="https://img.shields.io/badge/web%20contract-82%2F82%20passing-brightgreen">
 <img alt="render" src="https://img.shields.io/badge/render%20check-23%2F23%20passing-brightgreen">
@@ -32,7 +34,7 @@ exam-tracker は、資格試験の受験者向けの**学習管理システム**
 
 - **技術スタック**：Java 17 / Spring Boot 3.5 / Spring Security + JWT / Spring Data JPA / MySQL 8 / Springdoc OpenAPI
 - **設計方針**：すべてのクエリに `user_id` 条件を含めることで、ID を推測されても他人のデータに到達できないようにしています（IDOR 対策）
-- **品質**：単体テスト **217 件**、E2E 検証 **86 項目**、Web 契約検証 **82 項目**、描画セルフチェック **23 項目**をすべてパス（実測ログを本 README に掲載）
+- **品質**：単体テスト **217 件**、統合テスト **29 件**（実 MySQL + 実 HTTP、`mvn verify` に組み込み済み）、E2E 検証 **86 項目**、Web 契約検証 **82 項目**、描画セルフチェック **23 項目**をすべてパス（実測ログを本 README に掲載）
 - **同梱物**：ブラウザ UI、Swagger UI（`/api/doc.html`）、建表 SQL（`sql/schema.sql`）、デモデータ（`sql/seed.sql`）、Dockerfile、docker-compose.yml
 
 ## English
@@ -43,7 +45,7 @@ Spring Boot 3.5 / Java 17, and ships with a **zero-dependency, zero-build static
 
 - **Stack**: Java 17, Spring Boot 3.5, Spring Security + JWT, Spring Data JPA, MySQL 8, Springdoc OpenAPI
 - **Design**: every query is scoped by `user_id`, so guessing an ID never reaches another user's data (IDOR defence)
-- **Quality**: **217 unit tests**, **86 end-to-end assertions**, **82 web-contract assertions** and **23 render self-checks**, all passing (measured output included below)
+- **Quality**: **217 unit tests**, **29 integration tests** (real MySQL + real HTTP, wired into `mvn verify`), **86 end-to-end assertions**, **82 web-contract assertions** and **23 render self-checks**, all passing (measured output included below)
 - **Ships with**: a browser UI, Swagger UI at `/api/doc.html`, DDL in `sql/schema.sql`, demo data in `sql/seed.sql`, Dockerfile, docker-compose.yml
 
 ---
@@ -137,10 +139,12 @@ Spring Boot 3.5 / Java 17, and ships with a **zero-dependency, zero-build static
 | 安全 | Spring Security + **jjwt 0.12.6** | 无状态 JWT，BCrypt 存密码 |
 | 文档 | Springdoc OpenAPI **2.8.17** | Swagger UI：`/api/doc.html` |
 | 前端 | **原生 HTML + CSS + ES5 JavaScript** | 3 个文件 / 1,299 行，零依赖零构建 |
-| 测试 | JUnit 5 + Mockito + AssertJ + MockMvc | 217 个用例 |
+| 测试（单元） | JUnit 5 + Mockito + AssertJ + MockMvc | `mvn test` · **surefire** · 217 个用例，纯 Mockito 不启动容器 |
+| 测试（集成） | JUnit 5 + 真实 MySQL + 真实 HTTP | `mvn verify` · **failsafe** · 29 个用例，启动完整 Spring 容器 |
 | 构建 | Maven（`./mvnw`，无需预装） | 打包出可执行 fat jar |
+| CI | GitHub Actions | `mvn verify` + MySQL 8 service，每次 push / PR 自动跑 |
 
-规模：**50 个主源文件 / 3,862 行**，**16 个测试文件 / 3,808 行**（测试与主代码接近 1:1），
+规模：**50 个主源文件 / 3,862 行**，**17 个测试文件 / 4,588 行**（测试比主代码还多 19%），
 **3 个前端文件 / 1,299 行**。
 
 ---
@@ -201,6 +205,9 @@ mysql -h 127.0.0.1 -P 3308 -uroot -p exam_tracker < sql/seed.sql
 
 # 2) 打包（会先跑 217 个单元测试）
 ./mvnw package
+
+# 2b) 想连集成测试一起跑（需要一个真实可连的 MySQL，见 8.2）
+./mvnw verify
 
 # 3) 启动
 java -jar target/exam-tracker-1.0.0.jar
@@ -483,12 +490,12 @@ com.wpc725562.examtracker
 | 25 | `TaskServiceTest` | 分页页码 0 基/1 基转换、越权 404、N+1、单页上限、状态流转 |
 | 22 | `CheckinServiceTest` | 科目从任务推导、默认 30 天窗口、只为本页任务查标题、未来日期拒绝 |
 | 19 | `StatsServiceTest` | 分母为 0、周目标按窗口折算、两位小数、窗口区间 |
-| 18 | `StreakCalculatorTest` | 跨月 / 跨年 / 闰年 / 断签 / 「今天还没打卡」 |
-| 18 | `TaskControllerTest` | **userId 来自 token 而不是请求参数**、状态码映射、异常不泄漏 |
-| 16 | `AuthServiceTest` | 账号枚举防护、时间侧信道、唯一索引兜底、密码只存哈希 |
+| 19 | `StreakCalculatorTest` | 跨月 / 跨年 / 闰年 / 断签 / 「今天还没打卡」 |
+| 19 | `TaskControllerTest` | **userId 来自 token 而不是请求参数**、状态码映射、异常不泄漏 |
+| 17 | `AuthServiceTest` | 账号枚举防护、时间侧信道、唯一索引兜底、密码只存哈希 |
 | 16 | `SubjectServiceTest` | 删除保护（409 / `force=true`）、删除顺序、颜色归一化 |
 | 16 | `GlobalExceptionHandlerTest` | 12 个 handler 的状态码映射、**兜底不泄漏异常原文** |
-| 15 | `ValidationTest` | 每个 DTO 的边界值（1/1440、50/51、`#RGB`/`#RRGGBB`…） |
+| 16 | `ValidationTest` | 每个 DTO 的边界值（1/1440、50/51、`#RGB`/`#RRGGBB`…） |
 | 10 | `JwtServiceTest` | 密钥下限、签发/校验往返、伪造签名、过期、**token 不含敏感字段** |
 | 10 | `SortResolverTest` | 白名单精确匹配、400 而非 500、tie-breaker |
 | 10 | `TaskSpecificationsTest` | `%` / `_` / `\` 转义、空条件返回 null |
@@ -506,7 +513,105 @@ com.wpc725562.examtracker
    - `JwtServiceTest.tokenCarriesNoSensitiveClaims` —— 断言 claims 只有 5 个键。
      以后有人想「顺手把邮箱塞进 token 省一次查询」时，测试会立刻变红。
 
-### 8.2 端到端验证：86 项断言，全部通过
+### 8.2 集成测试：29 个用例，`mvn verify` 一次跑完
+
+```bash
+./mvnw verify
+```
+
+```
+[INFO] --- failsafe:3.5.5:integration-test (run-integration-tests) @ exam-tracker ---
+[INFO] Tests run: 29, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 8.507 s
+[INFO]                -- in 端到端集成测试（真实 MySQL + 真实 HTTP）
+[INFO] BUILD SUCCESS
+[INFO] Total time:  15.408 s
+```
+
+**为什么要有这一层**：上面 217 个单测全是纯 Mockito（不启动 Spring 容器），跑得飞快，
+但它们**验不了**这四类问题：
+
+| 单测验不了 | 举例 |
+|---|---|
+| Spring Security 的**过滤器链** | 单测里 `SecurityContext` 是手工塞的，验不了「静态资源真的被放行、业务接口真的被拦住」 |
+| JSON 序列化后的**字段名** | 前端按字段名取值，少一个就渲染成 `undefined`，而单测直接比对 Java 对象，根本看不到这一层 |
+| JPA 生成的 **SQL 能不能跑** | 单测里 Repository 是 mock 的，SQL 语法错误、表名对不上，单测全绿 |
+| **越权防护真的生效** | 单测验的是「查询条件里带了 `userId`」，验不了「带上之后真的查不到」 |
+
+所以这一层用**真实 MySQL + 真实 HTTP**跑，10 组共 **26 个测试方法**，
+其中「静态资源」那组是 `@ParameterizedTest`（4 个路径各跑一次），
+所以实际执行 **29 个用例**：
+
+| 组 | 方法数 | 内容 |
+|---|---:|---|
+| 1 | 2 | 静态资源匿名可达（`@ParameterizedTest`，4 个路径）+ **放行不影响安全边界**（业务接口仍 401） |
+| 2 | 5 | 登录 / 注册校验 / `me` / 未认证返回 **JSON 格式的 401**（不是 HTML 重定向） |
+| 3 | 2 | 科目列表字段 + 重名拒绝（约束按用户隔离） |
+| 4 | 4 | 任务分页外壳、**8 个字段齐全**、状态筛选、非法枚举/分页/排序字段 → 400 |
+| 5 | 2 | 总览 14 个字段 + 数值自洽 |
+| 6 | 2 | 四科看板 12 个字段 + 窗口天数回显与上限 |
+| 7 | 1 | 打卡按天汇总（柱状图数据源） |
+| 8 | 3 | 状态流转（`completedAt` 写上/清空）、写操作错误码、未来日期拒绝 |
+| 9 | 3 | **数据隔离**：B 看不到 A 的、按 id 直访 404、越权写操作后 A 的数据分毫未动 |
+| 10 | 2 | 删除保护：有数据 409 → `force=true` 才级联；空科目可直接删 |
+
+**测试数据自己造、自己清。** 不依赖 `sql/seed.sql` —— 种子数据的数字会随演示设计调整，
+把断言钉在那些数字上等于让测试和演示数据互相绑架。集成测试注册两个独立用户
+（`it_a_*` / `it_b_*`），自己建科目/任务/打卡，`@AfterAll` 再把自己删干净：
+
+```
+[ExamTrackerIT] 清理了 3 个测试用户（及其级联数据）
+```
+
+> 这顺带修掉了 `tools/p4-e2e-test.py` 的一个老毛病：它每次跑都会创建用户，
+> **但从来不清理**，跑 20 次库里就多 20 个 `e2e_*` 用户。集成测试不会留垃圾 ——
+> 实测跑完 `app_user` / `task` / `subject` / `checkin` 四张表里 `it_%` 的记录数都是 **0**。
+
+#### 三个刻意的取舍
+
+**① 用真实 MySQL，不用 Testcontainers。**
+最初的计划是 Testcontainers（「测试自带数据库，谁跑都一样」），但**开发机的 Docker 起不来**：
+
+```
+$ docker version
+Client: 29.7.2
+Server:                       ← 空
+failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine
+```
+
+Docker 起不来，Testcontainers 就**本地根本跑不了**这个测试 —— 那「`mvn verify` 一次跑完」
+就成了空话（CI 上绿、本地红，等于没有）。改成连真实 MySQL：本地用工作区的便携版
+（`127.0.0.1:3308`），CI 用 GitHub Actions 的 `services: mysql:8.0`。两边都是 MySQL 8，
+SQL 语义一致，而且 CI 上还少了一层 Docker-in-Docker。
+配置全部走 `application.yml` 里已有的 `${DB_HOST:...}` 这类环境变量，**测试代码里一行数据库配置都没写**。
+
+**② `surefire` 和 `failsafe` 分开，不让集成测试混进 `test` 阶段。**
+`mvn test` 只跑 `*Test`（8 秒，不依赖任何外部服务）；`mvn verify` 才额外跑 `*IT`。
+理由很实际：如果 IT 混进 `test` 阶段，「跑个单测」就变成「先起数据库」——
+久而久之没人跑单测了。而只有单测也验不了上面那四类问题。
+
+> **failsafe 必须同时绑定 `integration-test` 和 `verify` 两个 goal。**
+> 只绑 `integration-test` 的话，测试**失败了 `mvn verify` 依然是 BUILD SUCCESS** ——
+> 一个彻头彻尾的假绿。这条不是理论，是官方文档里专门标注的坑。
+
+**③ 断言只钉「不变式 + 下界」，不钉聚合量的具体数字。**
+最初写 `userBCannotSeeUserAData` 时我断言「B 有 1 个科目」——因为它前面那个用例
+给 B 建了一个同名科目。但 JUnit **不保证方法执行顺序**，于是这个断言的结果取决于
+「谁先跑」：单独跑全绿，整包跑随机红。这是最隐蔽的一类 flaky。
+现在改成：每个用例**用完就删自己造的数据**，聚合量只断言不变式（
+`今日任务数 == 完成 + 待办 + 跳过`、`总数 >= 7`）和**本测试内记下的基线**。
+
+**这个修复有机器证据**：用 `-Djunit.jupiter.testmethod.order.default=…MethodOrderer$Random`
+把 29 个用例的执行顺序打乱重跑，**执行顺序确实变了**（比对两次的 `<testcase>` 顺序，
+29 项排列完全不同），**仍然 BUILD SUCCESS**。
+
+#### 踩过的两个坑
+
+| 坑 | 现象 | 根因 |
+|---|---|---|
+| `PATCH` 请求直接抛异常 | `ProtocolException: Invalid HTTP method: PATCH` | `SimpleClientHttpRequestFactory` 基于 `HttpURLConnection`，**它不支持 PATCH**（只认 GET/POST/HEAD/OPTIONS/PUT/DELETE/TRACE）。改用 `JdkClientHttpRequestFactory`（`java.net.http.HttpClient` 原生支持 PATCH，且不用引 Apache HttpClient） |
+| 断言「应当返回 401」时拿到异常而不是状态码 | `HttpClientErrorException: 401 Unauthorized` | `RestTemplate` 默认的 `DefaultResponseErrorHandler` 遇到 4xx/5xx 会**抛异常**。这个测试有大量断言是「这里应当返回 401 / 404 / 409 / 400」，所以必须换成 `hasError` 恒返回 `false` 的 no-op 处理器 |
+
+### 8.3 端到端验证：86 项断言，全部通过
 
 `tools/p4-e2e-test.py` 对**真实运行的实例 + 真实 MySQL** 发起 HTTP 请求，
 分 9 组共 86 项断言：
@@ -544,19 +649,19 @@ com.wpc725562.examtracker
 > 说明：脚本在开发机上用 `http.client` 直连回环地址，绕过系统代理
 > （系统代理会劫持 `127.0.0.1` 的请求，`curl` 也需要 `--noproxy '*'`）。
 
-### 8.3 前端契约验证：82 项断言，全部通过
+### 8.4 前端契约验证：82 项断言，全部通过
 
 ```bash
 python tools/p4-web-e2e.py
 ```
 
-**为什么和 8.2 分开写：两者的失败模式完全不同。** 8.2 验的是「后端行为对不对」，
+**为什么和 8.3 分开写：两者的失败模式完全不同。** 8.3 验的是「后端行为对不对」，
 这一份验的是「**前端会不会白屏**」。
 
-举个具体的：8.2 会测「`PATCH /tasks/{id}` 改状态返回 200 且 `completedAt` 被写上」；
-8.3 会测「列表接口返回的每条任务都带 `subjectName` 字段」——
+举个具体的：8.3 会测「`PATCH /tasks/{id}` 改状态返回 200 且 `completedAt` 被写上」；
+8.4 会测「列表接口返回的每条任务都带 `subjectName` 字段」——
 因为任务行要显示科目名，后端如果只回 `subjectId`，前端就渲染成 `undefined`，
-而**接口返回 200，8.2 那 86 项全绿，页面却是坏的**。
+而**接口返回 200，8.3 那 86 项全绿，页面却是坏的**。
 
 分 8 组共 82 项：
 
@@ -596,7 +701,7 @@ python tools/p4-web-e2e.py
 > **登录页本身会被 401 挡掉** —— 用户看到的现象是「整个页面打不开」而不是「登录失败」，
 > 极易被误判成前端写坏了。这个坑真踩过。
 
-### 8.4 渲染自检：23 项断言 + 8 张截图
+### 8.5 渲染自检：23 项断言 + 8 张截图
 
 ```bash
 NODE_PATH=<node-workspace>/node_modules node tools/screenshot.js
@@ -640,29 +745,84 @@ HTTP 200、静态资源也全 200，但 JS 里一个选择器写错、一个字�
 - **监听 `pageerror` 与 `console.error`**。未捕获异常在 headless 里是静默的，不监听就等于没测。
 - **崩溃时自动存 `99-failure.png`**。白屏排查最需要的就是「崩的那一刻长什么样」。
 
-### 8.5 四类验证的关系
+### 8.6 五层验证的关系
 
-| 脚本 | 断言数 | 验证什么 | 失败时说明 |
+| 载体 | 断言数 | 验证什么 | 失败时说明 |
 |---|---:|---|---|
-| `./mvnw test` | 217 | 类与方法的行为契约 | 后端逻辑错了 |
+| `./mvnw test` | 217 | 类与方法的行为契约（纯 Mockito，8 秒） | 后端逻辑错了 |
+| `./mvnw verify` | +29 | 真实 MySQL + 真实 HTTP 的端到端契约 | 过滤器链 / JSON 字段名 / JPA SQL / 越权防护 坏了 |
 | `tools/p4-e2e-test.py` | 86 | 真实实例 + 真实 MySQL 的端到端语义 | 集成层面错了 |
 | `tools/p4-web-e2e.py` | 82 | 前端依赖的接口契约 | 前端会拿到坏数据 |
 | `tools/screenshot.js` | 23 | 页面真的渲染出来了 | 前端会白屏 |
 
-**合计 408 项断言，全部通过。** 四者互相不可替代：一个接口可以「单测全绿 + 端到端全绿」
-但前端仍然白屏（字段名对不上），也可以「接口契约全绿」但后端逻辑错（两端一起错）。
+**关于「合计」要诚实说一句**：`mvn verify` 里那 29 项和 `p4-web-e2e.py` 的 82 项
+**是同一批断言的两种载体** —— 集成测试就是把前端契约断言搬进了 Java、搬进了构建。
+所以不能简单相加说「433 项」，去重后的**独立**断言是
+**217 + 86 + 82 + 23 = 408 项**，集成测试是这 408 项里「接口契约」那部分的
+**可重复执行版本**（能进 CI、能在本地 `mvn verify` 一次跑完、跑完自动清库）。
+
+那为什么搬进 Java 之后**还留着** `p4-web-e2e.py`？因为它有两个集成测试替代不了的好处：
+**① 它是独立的第二实现** —— 用 Python 的 `http.client` 手写请求，不复用 Java 侧任何
+DTO / 序列化 / 客户端配置。如果 Java 侧的 `RestTemplate` 配置错了（比如那条 no-op
+错误处理器写反），Java 测试会跟着一起错，而 Python 脚本不会。
+**② 它能对着一个真正在跑的实例跑**（`run.cmd` 起的 8090），验的是「部署出来的东西」
+而不是「测试里启动的东西」。
+
+四者互相不可替代：一个接口可以「单测全绿 + 端到端全绿」但前端仍然白屏（字段名对不上），
+也可以「接口契约全绿」但后端逻辑错（两端一起错）。
 
 ---
 
-## 9. 项目结构
+## 9. CI：每次 push 自动跑 `mvn verify`
+
+`.github/workflows/ci.yml` —— push / PR 到 `main` 时自动执行：
+
+```
+services:
+  mysql:8.0            # GitHub 托管，带 healthcheck，就绪后才开始跑测试
+steps:
+  checkout → setup-java(17, temurin, maven 缓存)
+  → mysql < sql/schema.sql        # 建表
+  → ./mvnw -B verify              # 217 单测 + 29 集成测试
+  → upload-artifact（surefire/failsafe 报告，if: always()）
+```
+
+三个细节，外加一个差点漏掉的坑：
+
+- **`if: always()` 上传报告**。测试失败时最需要报告，不加这句失败的那次反而没有报告。
+- **`concurrency` + `cancel-in-progress`**。连续 push 时自动取消上一次，
+  不然几次运行会同时抢 MySQL service，日志互相污染。
+- **`options: --health-*`**。MySQL 容器起来到能接受连接有十几秒，
+  没有 healthcheck 的话第一步 `mysql < schema.sql` 就会连接失败 —— 而且报的是
+  「表建不上」，很容易误判成 SQL 有问题。
+
+**④ 时区**：GitHub runner 的默认时区是 **UTC**，而测试用
+`LocalDate.now()` 造数据、统计接口也用 `LocalDate.now()` 算「今天」。
+如果 JVM 跑在 UTC 而本机在北京时间，那么**北京时间 00:00–08:00 这 8 小时里
+「今天」会差一天** —— 测试造的数据落在「明天」，统计查不到，红得莫名其妙，
+而且只有三分之一的运行会红。所以 workflow 里显式设了 `TZ: Asia/Shanghai`。
+
+> 排查时确认了两件事：① 「今天」是在 **Java 侧**算的（`StatsService` 里
+> `LocalDate.now()`），不是 SQL 的 `CURDATE()` —— 后者会跟随 MySQL 容器时区（UTC）；
+> ② 所有时间列都是 `DATETIME(6)` / `DATE`，**没有 `TIMESTAMP`**
+> （`TIMESTAMP` 会被 MySQL 按时区转换，`DATETIME` 不会），
+> `created_at` 由 JPA 的 `@CreatedDate` 在 Java 侧填。
+> 两条都成立，`TZ` 才是唯一需要固定的地方。
+
+---
+
+## 10. 项目结构
 
 ```
 exam-tracker/
 ├── run.cmd / run.sh              # 一条命令启动（Windows / Linux·macOS）
-├── pom.xml
+├── pom.xml                       # surefire 排除 *IT / failsafe 收 *IT
 ├── Dockerfile                    # 多阶段构建（未在真实 Docker 上验证，见 4.5）
 ├── docker-compose.yml            # app + mysql 一键起（同上）
 ├── .dockerignore
+├── .github/
+│   └── workflows/
+│       └── ci.yml                # push / PR -> mvn verify（带 MySQL 8 service）
 ├── docs/
 │   └── screenshots/              # README 第 2 节用的 8 张截图
 ├── sql/
@@ -689,7 +849,9 @@ exam-tracker/
     │   └── resources/
     │       ├── application.yml   # 全部可覆盖项都写成 ${ENV:default}
     │       └── static/           # 前端：index.html + app.js + style.css
-    └── test/java/…               # 16 个测试类 / 217 个用例
+    └── test/java/…
+        ├── …（16 个单元测试类 / 217 个用例，纯 Mockito，`mvn test` 跑）
+        └── it/ExamTrackerIT.java # 集成测试 29 个用例，真实 MySQL + 真实 HTTP，`mvn verify` 跑
 ```
 
 ### 关于 `tools/GenBcrypt.java`
@@ -709,7 +871,7 @@ exam-tracker/
 
 ---
 
-## 10. 已知限制与下一步
+## 11. 已知限制与下一步
 
 **明确的限制（不是「以后再说」，是现在就没做）：**
 
@@ -718,12 +880,17 @@ exam-tracker/
 - 没有限流。登录接口面对暴力破解没有速率限制，生产环境应在网关层加。
 - 统计接口没有缓存。数据量到十万级时 `subjectBoard` 的四个聚合查询会成为瓶颈，
   届时需要按 `(user_id, checkin_date)` 建汇总表或加 Redis 缓存。
-- 没有集成测试（`*IT.java`）。当前 `surefire` 显式排除了它们，
-  端到端验证靠 `tools/p4-e2e-test.py` 这个外部脚本承担 —— 好处是不依赖 Testcontainers，
-  代价是它不在 `mvn verify` 里，需要单独跑。
+- **集成测试连的是「外部数据库」，不自带。** 跑 `mvn verify` 前得先有一个能连的 MySQL
+  （本地 3308 / CI 由 service 提供）。这是为了绕开「本机 Docker 起不来 → Testcontainers
+  不可用」的取舍（见 8.2），代价是**新机器上 `mvn verify` 会红**，而 `mvn test` 永远绿。
+  对「想先看看代码质量」的人，这个门槛是真实存在的。
+- **集成测试用的不是测试专用库。** 它和演示数据共用同一个 `exam_tracker` 库，
+  靠 `it_*` 用户名前缀 + `@AfterAll` 清理来隔离。好处是零配置，
+  代价是**跑测试期间库里会短暂多出几个 `it_*` 用户**，而且如果 JVM 被强杀，
+  残留数据要等下一次运行才会被清掉（`@AfterAll` 里那条 SQL 顺手清历史残留）。
 - **前端没有覆盖交互逻辑的自动化测试**。`tools/screenshot.js` 验的是「页面渲染出来了」，
   验不了「点这个按钮应该发生什么」—— 状态流转、筛选、新建表单这些交互目前只在
-  接口层面被 `tools/p4-web-e2e.py` 间接覆盖，浏览器里真的点一遍还得靠人。
+  接口层面被 `tools/p4-web-e2e.py` 和集成测试间接覆盖，浏览器里真的点一遍还得靠人。
 - 前端是手写 ES5，没有构建步骤也就没有类型检查、没有模块打包。
   代价是 `app.js` 613 行集中在一个文件里，再长就该拆了。
 - 任务列表一次加载全部（37 条），没有分页。后端接口是支持分页的，
@@ -731,16 +898,21 @@ exam-tracker/
 
 **下一步（按性价比排序）：**
 
-1. 用 Testcontainers 把 `p4-e2e-test.py` 的断言搬进 `*IT.java`，让 `mvn verify` 一次跑完
-2. 加 GitHub Actions：`mvn verify` + 三个验证脚本
-3. 前端补交互测试（Playwright 的 `@playwright/test` 可以直接复用
-   `tools/screenshot.js` 里那段登录流程）
-4. 任务列表接上后端已有的分页参数
-5. 统计接口加缓存（先测量，再优化）
+1. **把 `tools/p4-e2e-test.py` 的 86 项也搬进 `*IT.java`** —— 现在搬进来的是
+   `p4-web-e2e.py` 那批（接口契约）。`p4-e2e-test.py` 里还有一批集成测试没覆盖的：
+   存活探针、Swagger UI / OpenAPI 文档可达、通配符转义、日志体检（无 `ERROR` 行）。
+   搬完就能把「外部脚本」这一层彻底去掉。
+2. **前端补交互测试**（Playwright 的 `@playwright/test` 可以直接复用
+   `tools/screenshot.js` 里那段登录流程）。这是当前**唯一**没有人管的一层 ——
+   其余四层都自动化了，只有「真的点一下」还得靠人。
+3. 给集成测试换成 Testcontainers（等本机 Docker 能用之后）——
+   这样 `mvn verify` 就能真正「一条命令、零前置」。
+4. 任务列表接上后端已有的分页参数。
+5. 统计接口加缓存（先测量，再优化）。
 
 ---
 
-## 11. 作者
+## 12. 作者
 
 **wpc725562-dotcom** · AI Agent 开发者
 仓库：<https://github.com/wpc725562-dotcom>

@@ -140,7 +140,16 @@
                 </configuration>
             </plugin>
 
-            <!-- 单元测试（*Test）与集成测试（*IT）分开，后者默认不跑 -->
+            <!--
+              单元测试（*Test）与集成测试（*IT）分成两套，用两个插件跑：
+                mvn test     -> surefire，只跑 *Test（纯 Mockito，8 秒，不依赖任何外部服务）
+                mvn verify   -> surefire + failsafe，额外跑 *IT（真实 MySQL + 真实 HTTP）
+
+              为什么必须分开：单测的价值在于「随时能跑」——改一行代码就顺手跑一下。
+              如果把需要 MySQL 的 IT 混进 test 阶段，「跑个单测」就变成「先起数据库」，
+              久而久之就没人跑了。反过来，只有单测也验不了 Security 过滤器链、
+              JSON 字段名、越权防护这些「只有真跑起来才暴露」的问题。
+            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -149,6 +158,30 @@
                         <exclude>**/*IT.java</exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+
+            <!--
+              集成测试。绑定 integration-test（跑）和 verify（核对结果）两个阶段 ——
+              少了 verify 那一半，测试失败了 `mvn verify` 也是 BUILD SUCCESS，
+              这种「红了却报绿」的坑比不跑测试更糟。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/*IT.java</include>
+                    </includes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>run-integration-tests</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
