@@ -809,6 +809,11 @@ steps:
 > `created_at` 由 JPA 的 `@CreatedDate` 在 Java 侧填。
 > 两条都成立，`TZ` 才是唯一需要固定的地方。
 
+另外一件小事：`mvnw` / `run.sh` 的执行位以前**没有记进 git**（存的是 `100644`），
+Linux 上 `./mvnw` 直接 `Permission denied` —— 而报错信息看起来像是脚本本身坏了。
+现在两个文件都是 `100755`，CI 里还留了一句 `chmod +x` 兜底（Windows 上 clone
+有时会丢执行位）。
+
 ---
 
 ## 10. 项目结构
