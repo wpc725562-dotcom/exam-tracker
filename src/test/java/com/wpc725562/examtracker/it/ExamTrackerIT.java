@@ -21,7 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.web.client.ResponseErrorHandler;
+import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.DefaultUriBuilderFactory;
 
@@ -131,15 +131,14 @@ class ExamTrackerIT {
 
         RestTemplate rt = new RestTemplate(factory);
         rt.setUriTemplateHandler(new DefaultUriBuilderFactory("http://127.0.0.1:" + port + "/api"));
-        rt.setErrorHandler(new ResponseErrorHandler() {
+        // 只覆写 hasError、**不实现 handleError**：后者在 Spring 里已被标记为
+        // 「deprecated and marked for removal」，自己实现它会在编译时产生弃用告警。
+        // 继承 DefaultResponseErrorHandler 就绕开了 —— hasError 返回 false 之后
+        // handleError 永远不会被调用，继承来的那个实现是什么样都无所谓。
+        rt.setErrorHandler(new DefaultResponseErrorHandler() {
             @Override
             public boolean hasError(ClientHttpResponse response) {
                 return false;   // 永不视为错误 -> 永不抛异常，状态码交给断言去判
-            }
-
-            @Override
-            public void handleError(ClientHttpResponse response) {
-                // no-op
             }
         });
         this.http = rt;
