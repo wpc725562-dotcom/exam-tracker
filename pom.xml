@@ -29,7 +29,36 @@
         -->
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.8.17</springdoc.version>
+
+        <!--
+          ★ Spring AI 必须用 1.x，不能用 2.x。
+
+          Spring AI 2.0.1 的 spring-ai-starter-model-openai 依赖
+          spring-boot-starter-restclient / -webclient，而这两个 artifact 从
+          4.0.0-M1 才开始存在（查 maven-metadata.xml 确认）⇒ 2.x 要求 Spring Boot 4.x，
+          与本项目的 3.5.14 不兼容，加进去会在依赖解析阶段就炸。
+
+          1.1.8 只依赖通用的 spring-boot-starter；spring-ai-commons 的字节码
+          major=61（Java 17），与本项目 Java 17 一致。
+        -->
+        <spring-ai.version>1.1.8</spring-ai.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!--
+              用 BOM 统一版本，不给每个 spring-ai-* 单独写版本号 ——
+              它们之间版本必须严格一致，散着写迟早会写歪一个。
+            -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Web -->
@@ -89,6 +118,22 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+          AI 能力层：把自然语言问题映射成对已有 Service 方法的调用（Function Calling）。
+
+          ★ 为什么是 -model-openai：DeepSeek 提供的是 **OpenAI 兼容端点**
+          （base_url = https://api.deepseek.com），所以复用 OpenAI 的客户端即可，
+          不需要自研一个 DeepSeek 专用的 starter。真正的「DeepSeek 味道」只体现在
+          配置里的 base-url / 模型名 / api-key 三处（见 application.yml 的 app.ai 段）。
+
+          ★ 用 starter 而不是手搓 ChatClient：starter 会把 ChatClient.Builder、
+          工具回调解析（@Tool 注解扫描）、重试等自动装配好。
+        -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
 
         <!-- 减少样板代码 -->

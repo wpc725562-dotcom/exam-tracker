@@ -499,3 +499,167 @@ a { color: var(--accent); }
     padding: 1px 5px;
     border-radius: 4px;
 }
+
+/* -------------------------------------------------------------- AI 助手 --- */
+
+.ai-badge {
+    margin-left: 8px;
+    font-size: 11px;
+    font-family: ui-monospace, Consolas, monospace;
+    color: var(--accent);
+    background: #EEEDFB;
+    border: 1px solid #DCDAF7;
+    border-radius: 999px;
+    padding: 1px 8px;
+}
+
+/* AI 未启用时的说明块 */
+.ai-off {
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    background: #FBFBF9;
+    padding: 14px 16px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.ai-off strong { color: var(--text); font-size: 14px; }
+.ai-off p { margin: 8px 0 0; }
+
+.ai-off-cmd {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 12px;
+    line-height: 2;
+    color: var(--text);
+}
+
+.ai-off code {
+    background: #EFEEEA;
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+/* 对话流 */
+.ai-thread { display: flex; flex-direction: column; gap: 12px; }
+.ai-thread:not(:empty) { margin-bottom: 14px; }
+
+.ai-msg { display: flex; flex-direction: column; gap: 4px; }
+.ai-msg.user { align-items: flex-end; }
+
+.ai-msg .who {
+    font-size: 11px;
+    color: var(--faint);
+    letter-spacing: .3px;
+}
+
+.ai-bubble {
+    max-width: 88%;
+    padding: 10px 13px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    white-space: pre-wrap;   /* 模型会输出换行，要保留 */
+    word-break: break-word;
+}
+
+.ai-msg.user .ai-bubble {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    white-space: pre-wrap;
+}
+
+.ai-msg.assistant .ai-bubble strong { color: var(--accent); }
+
+/* 工具调用轨迹：默认收起，点一下展开 */
+.ai-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.ai-tool {
+    font-family: ui-monospace, Consolas, monospace;
+    background: #EFEEEA;
+    border-radius: 4px;
+    padding: 1px 6px;
+}
+
+.ai-tool.failed { background: #FBE9E3; color: #8E2F1B; }
+
+/* 降级 / 错误提示 */
+.ai-warn {
+    font-size: 12px;
+    color: var(--warning);
+    background: #FDF4E5;
+    border: 1px solid #F2E0C0;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+
+.ai-err {
+    font-size: 12px;
+    color: #8E2F1B;
+    background: #FBE9E3;
+    border: 1px solid #F0D3C9;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+
+/* 输入区 */
+.ai-form { display: flex; gap: 8px; }
+
+.ai-form input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    outline: none;
+}
+
+.ai-form input:focus { border-color: var(--accent); }
+.ai-form input:disabled { background: #F4F3F0; color: var(--faint); }
+
+.ai-samples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.chip {
+    font-size: 12px;
+    color: var(--muted);
+    background: #F4F3F0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 11px;
+    transition: background .15s, color .15s;
+}
+
+.chip:hover { background: #EEEDFB; color: var(--accent); border-color: #DCDAF7; }
+.chip:disabled { opacity: .5; cursor: default; }
+
+.ai-foot {
+    margin: 12px 0 0;
+    font-size: 12px;
+    color: var(--faint);
+    line-height: 1.8;
+}
+
+/* 「思考中」的三个点 */
+.ai-dots::after {
+    content: '…';
+    animation: ai-dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes ai-dots {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+}

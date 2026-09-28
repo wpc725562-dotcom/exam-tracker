@@ -46,6 +46,30 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 20s
 
+  # ---------------------------------------------------------------------------
+  #  Spring AI：把自带的模型自动配置**全部**关掉
+  #  ---------------------------------------------------------------------------
+  #  实测（不是推测）：只要 spring-ai-starter-model-openai 在 classpath 上而没配
+  #  spring.ai.openai.api-key，应用启动阶段就会抛
+  #      IllegalArgumentException: OpenAI API key must be set.
+  #  而且它会对六种模型分别检查（chat / embedding / image / moderation /
+  #  语音合成 / 语音转写）—— 缺一个就整个起不来。最先炸的甚至不是 chat，是语音合成。
+  #
+  #  本项目只用得到 chat，而且**没有 key 的环境（CI、别人 clone 下来）必须能正常启动**，
+  #  所以六个全关，由 AiConfig 手工构建唯一需要的那一个。
+  #
+  #  模型名、base-url、key 全部放在下面的 app.ai.* 里 —— 和 app.jwt / app.cors 一致，
+  #  不需要在两套配置前缀之间来回对照。
+  ai:
+    model:
+      chat: none
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+
   datasource:
     url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3308}/${DB_NAME:exam_tracker}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
     username: ${DB_USERNAME:dev}
@@ -101,6 +125,40 @@ app:
   cors:
     # 逗号分隔。前端跑在 5173（Vite 默认）或 3000（很多模板用这个）时都能连。
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+  # ---------------------------------------------------------------------------
+  #  AI 层（自然语言查学习数据）
+  # ---------------------------------------------------------------------------
+  #  ★ 默认**关闭**。
+  #
+  #    这是个刻意的默认值：AI 层需要一个外部 API key，而「没配 key 就跑不起来」
+  #    对 CI、对别人 clone 下来的第一次运行都是灾难。默认关闭意味着
+  #    clone → 起服务 → 记账/打卡/统计全部正常，只有 /ai/ask 会返回一个
+  #    说明清楚原因的 503。
+  #
+  #    要启用：设 AI_ENABLED=true 并提供 DEEPSEEK_API_KEY。
+  #      bash:  export DEEPSEEK_API_KEY=sk-xxxx && AI_ENABLED=true ./mvnw spring-boot:run
+  #      cmd :  set DEEPSEEK_API_KEY=sk-xxxx && set AI_ENABLED=true && run.cmd
+  #
+  #  ⚠️ key 只能来自环境变量。**绝不写进这个文件** —— 它会被提交进仓库。
+  ai:
+    enabled: ${AI_ENABLED:false}
+    base-url: ${AI_BASE_URL:https://api.deepseek.com}
+    api-key: ${DEEPSEEK_API_KEY:}
+    model: ${AI_MODEL:deepseek-flash}
+    # 单次 HTTP 请求超时。一次问答最多包含两轮请求（工具调用 + 组织回答），
+    # 所以最坏耗时约为此值的两倍。注意本项目**不用** Spring AI 的默认重试策略
+    # （默认是 10 次尝试、退避上限 180 秒），见 AiConfig 里的说明。
+    #
+    # 45s 是实测调出来的：最早设 20s，在一次连续验证中真的超时了一次
+    # （DeepSeek 那一次比平时慢很多）。带工具调用的 LLM 请求偶尔会明显慢于均值。
+    timeout: ${AI_TIMEOUT:45s}
+    # 查数据场景要的是稳定复现，不是文采，所以温度默认 0。
+    temperature: ${AI_TEMPERATURE:0.0}
+    # 多轮对话保留的最大消息条数（含工具调用消息）。
+    max-history-messages: ${AI_MAX_HISTORY_MESSAGES:20}
+    # 会话空闲多久后过期。内存态实现，**进程重启即丢**（见 README 的已知限制）。
+    session-ttl: ${AI_SESSION_TTL:30m}
 
 # -----------------------------------------------------------------------------
 #  接口文档：/api/doc.html

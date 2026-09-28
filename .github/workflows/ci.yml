@@ -2,8 +2,13 @@
 #  CI —— 每次 push / PR 都跑一遍完整验证
 #  ---------------------------------------------------------------------------
 #  跑的是 `mvn verify`，也就是**单测 + 集成测试**：
-#    · surefire  217 个单元测试（纯 Mockito，不依赖外部服务）
-#    · failsafe  ExamTrackerIT —— 真实 MySQL + 真实 HTTP 的端到端测试
+#    · surefire  309 个单元测试（纯 Mockito，不依赖外部服务）
+#    · failsafe  ExamTrackerIT —— 真实 MySQL + 真实 HTTP 的端到端测试（35 个用例）
+#
+#  ★ 这里**不会调用任何大模型**：没有配 DEEPSEEK_API_KEY，AI 层走「未启用」路径，
+#    而那条路径恰好也有集成测试守着（ExamTrackerIT 第 11 组）。
+#    所以 CI 验的正是「别人 clone 下来不配任何东西时能不能跑」这个真实场景。
+#    真调模型的验证在 tools/p4-ai-e2e.py 里，需要 key 时手动跑。
 #
 #  为什么不在这里用 Testcontainers：
 #    开发机的 Docker 起不来（dockerDesktopLinuxEngine 管道不存在），

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -683,6 +684,126 @@ class ExamTrackerIT {
     void emptySubjectDeletesFreely() {
         Long id = createSubject("空的科目", "#999999", 100);
         assertThat(call(HttpMethod.DELETE, "/subjects/" + id, null, tokenA).status()).isEqualTo(200);
+    }
+
+    // =========================================================================
+    //  11. AI 助手（接口契约 + 未启用时的降级行为）
+    // =========================================================================
+    //
+    //  这一组**故意不依赖真实模型调用**。原因：
+    //    · 本机有 DEEPSEEK_API_KEY，CI 没有 —— 任何「断言模型返回了什么」的测试
+    //      都会变成「本机绿、CI 红」或反过来的薛定谔测试；
+    //    · 真调模型要钱、要网络、有延迟，不该塞进每次 `mvn verify`。
+    //
+    //  真正需要模型参与的那部分（能不能正确选工具、参数错了会不会自我纠正、
+    //  多轮对话有没有继承上下文、跨用户会不会泄漏）已经在开发阶段用真实 key
+    //  端到端跑过并逐个数字核对过，结论记在 README「AI 层」一节。
+    //
+    //  这里守住的是另外四件**不需要 key 也必须有确定答案**的事：
+    //    ① 接口契约（字段名、状态码）—— 前端按字段名取值，改错了页面就白屏；
+    //    ② 认证边界 —— 匿名不能问、也问不到别人的数据；
+    //    ③ 参数校验 —— 空问题在进模型之前就该被挡掉，不能白花一次调用；
+    //    ④ 降级 —— 未启用时必须是「503 + 告诉人配什么」，而不是 404 或空答案。
+
+    @Test
+    @DisplayName("11. /ai/status 契约：enabled 必在；未启用时不暴露模型名")
+    void aiStatusContract() {
+        Res res = call(HttpMethod.GET, "/ai/status", null, tokenA);
+
+        assertThat(res.status()).isEqualTo(200);
+        assertThat(res.code()).as("业务码 0").isEqualTo(0);
+        assertThat(res.has("/data/enabled"))
+                .as("enabled 字段必须存在 —— 前端靠它决定显示输入框还是「未启用」说明块")
+                .isTrue();
+        assertThat(res.at("/data/enabled").isBoolean()).as("必须是布尔值，不是字符串").isTrue();
+
+        if (!res.at("/data/enabled").asBoolean()) {
+            assertThat(res.has("/data/model"))
+                    .as("未启用时不能给出模型名（jackson 配了 non_null，null 字段会被整个省略）")
+                    .isFalse();
+        } else {
+            assertThat(res.at("/data/model").asText()).as("启用时模型名不能是空的").isNotBlank();
+        }
+
+        // 无论开没开，都不能把 key 相关的东西漏出去
+        assertThat(res.body().toString())
+                .as("响应里不该出现任何凭据痕迹")
+                .doesNotContain("apiKey").doesNotContain("api-key").doesNotContain("sk-");
+    }
+
+    @Test
+    @DisplayName("11b. /ai/ask 必须登录：匿名 401，错误方法 405")
+    void aiAskRequiresAuthentication() {
+        assertThat(call(HttpMethod.POST, "/ai/ask", Map.of("question", "今天怎么样？"), null).status())
+                .as("匿名提问 -> 401").isEqualTo(401);
+
+        assertThat(call(HttpMethod.POST, "/ai/ask", Map.of("question", "今天怎么样？"), "not-a-real-token").status())
+                .as("伪造 token -> 401").isEqualTo(401);
+
+        assertThat(call(HttpMethod.GET, "/ai/ask", null, tokenA).status())
+                .as("GET 不是这个接口的方法 -> 405").isEqualTo(405);
+    }
+
+    @Test
+    @DisplayName("11c. 空问题在进模型之前就被挡掉（400），不白花一次调用")
+    void aiAskRejectsBlankQuestion() {
+        // question 上有 @NotBlank，且控制器标了 @Validated -> 校验失败应在
+        // 进业务逻辑之前发生。用一个「无论 AI 开没开都成立」的断言来验它：
+        // 未启用时若校验没生效，返回的会是 503 而不是 400。
+        for (String q : new String[]{null, "", "   ", "\t\n"}) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            if (q != null) {
+                body.put("question", q);
+            }
+            assertThat(call(HttpMethod.POST, "/ai/ask", body, tokenA).status())
+                    .as("question=%s 时应 400", q == null ? "缺失" : "「" + q.replace("\n", "\\n") + "」")
+                    .isEqualTo(400);
+        }
+    }
+
+    @Test
+    @DisplayName("11d. ★ 未启用时 /ai/ask 返回 503 + 可操作的说明（不是 404、不是空答案）")
+    void aiAskWithoutKeyReturns503WithActionableMessage() {
+        Res status = call(HttpMethod.GET, "/ai/status", null, tokenA);
+        Assumptions.assumeTrue(!status.at("/data/enabled").asBoolean(),
+                "本机配了 DEEPSEEK_API_KEY，AI 已启用 —— 这条只验未启用路径，跳过而非失败");
+
+        Res res = call(HttpMethod.POST, "/ai/ask", Map.of("question", "今天怎么样？"), tokenA);
+
+        assertThat(res.status()).as("必须是 503：我们没问题，是功能没开").isEqualTo(503);
+        assertThat(res.code()).as("业务码应是 UNAVAILABLE").isEqualTo(50300);
+        assertThat(res.at("/message").asText())
+                .as("只说「未启用」没用，要告诉人到底配什么")
+                .contains("DEEPSEEK_API_KEY");
+        assertThat(res.has("/data"))
+                .as("失败时不能带 data —— 空 data 会被前端误读成「答案就是空的」")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("11e. AI 未启用不影响核心功能（记账 / 打卡 / 统计照常）")
+    void coreFeaturesUnaffectedWhenAiDisabled() {
+        assertThat(call(HttpMethod.GET, "/stats/overview", null, tokenA).status()).isEqualTo(200);
+        assertThat(call(HttpMethod.GET, "/subjects", null, tokenA).status()).isEqualTo(200);
+        assertThat(call(HttpMethod.GET, "/tasks?page=1&size=10", null, tokenA).status()).isEqualTo(200);
+        assertThat(call(HttpMethod.GET, "/checkins?page=1&size=10", null, tokenA).status()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("11f. /ai/status 本身不泄漏任何用户数据（不带 token 也能拿到，且内容与用户无关）")
+    void aiStatusIsUserAgnostic() {
+        // 这个接口的语义是「服务端有没有配好 AI」，与「你是谁」无关。
+        // 它现在需要登录（不在 PUBLIC_PATHS 里），但只要登录了，
+        // A 和 B 看到的必须是同一个答案 —— 如果哪天有人不小心把用户相关的东西
+        // 塞进这个响应，这条会红。
+        Res asA = call(HttpMethod.GET, "/ai/status", null, tokenA);
+        Res asB = call(HttpMethod.GET, "/ai/status", null, tokenB);
+
+        assertThat(asA.status()).isEqualTo(200);
+        assertThat(asB.status()).isEqualTo(200);
+        assertThat(asB.body().toString())
+                .as("A 和 B 看到的 AI 状态必须完全一致")
+                .isEqualTo(asA.body().toString());
     }
 
     // =========================================================================

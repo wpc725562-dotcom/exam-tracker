@@ -5,7 +5,7 @@
 
    1. **零依赖、零构建。** 没有 React / Vue，没有 Vite，没有 node_modules。
       一个现代前端工程的 node_modules 动辄两万个文件，而这个页面的全部逻辑
-      不到 400 行 —— 为它养一套构建链不划算，而且会让「clone 下来就能跑」
+      不到 800 行 —— 为它养一套构建链不划算，而且会让「clone 下来就能跑」
       变成「先 npm install 五分钟」。这里 clone → 起 jar → 打开浏览器，中间没有第三步。
 
    2. **图表是手写的 SVG，不引 Chart.js。** 引 CDN 意味着**断网就打不开**，
@@ -36,7 +36,11 @@
         subjects: [],
         statusFilter: '',
         subjectFilter: '',
-        authMode: 'login' // 'login' | 'register'
+        authMode: 'login', // 'login' | 'register'
+        // AI 助手：可用性由后端 /ai/status 决定（没有配 key 时后端也是正常启动的）
+        aiEnabled: false,
+        // 当前对话 id。第一次提问时留空，服务端会生成一个并返回，之后原样带上即可续聊。
+        aiConversationId: ''
     };
 
     /* --------------------------------------------------------------- 小工具 --- */
@@ -191,6 +195,12 @@
         state.user = null;
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USER_KEY);
+        // 会话 id 是服务端按用户隔离的，换账号必须清掉 ——
+        // 留着会让新用户的第一句话被接到上一个用户的对话里
+        state.aiConversationId = '';
+        state.aiEnabled = false;
+        $('ai-thread').innerHTML = '';
+        $('btn-ai-reset').classList.add('hidden');
         $('app-view').classList.add('hidden');
         $('login-view').classList.remove('hidden');
         if (!silent) toast('已退出登录');
@@ -201,6 +211,7 @@
         $('app-view').classList.remove('hidden');
         renderUser();
         loadAll();
+        initAi();
     }
 
     /* ------------------------------------------------------------------ 渲染 --- */
@@ -417,6 +428,126 @@
         }).join('');
     }
 
+    /* -------------------------------------------------------------- AI 助手 --- */
+
+    /**
+     * 把模型返回的文本渲染成安全的 HTML。
+     *
+     * **先转义、再套格式**，顺序不能反：模型输出是不可信内容
+     * （它可能把用户输入的内容原样带回来，而用户输入里可以有 `<script>`），
+     * 先转义能保证任何标签都变成字面文本。之后替换的 `**加粗**` 是我们自己生成的
+     * 白名单标签，不含用户可控内容，所以是安全的。
+     *
+     * 换行靠 CSS 的 `white-space: pre-wrap` 保留，不在这里转 `<br>`。
+     */
+    function formatAnswer(text) {
+        return esc(text)
+            .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/^\s*[-*]\s+/gm, '· ');
+    }
+
+    /** 问后端 AI 是否可用。没配 key 时后端照常启动，只是这个接口会说 enabled=false。 */
+    function initAi() {
+        return api('/ai/status')
+            .then(function (s) {
+                state.aiEnabled = !!(s && s.enabled);
+                $('ai-off').classList.toggle('hidden', state.aiEnabled);
+                $('ai-on').classList.toggle('hidden', !state.aiEnabled);
+                $('ai-model').textContent = state.aiEnabled ? (s.model || '') : '';
+                $('ai-note').textContent = state.aiEnabled ? '只读查询 · 可多轮追问' : '';
+            })
+            .catch(function () {
+                // 查不到状态就按「不可用」处理，并如实说明，而不是留一个点了会报错的输入框
+                state.aiEnabled = false;
+                $('ai-on').classList.add('hidden');
+                $('ai-off').classList.remove('hidden');
+            });
+    }
+
+    function appendAiMessage(role, innerHtml) {
+        var wrap = document.createElement('div');
+        wrap.className = 'ai-msg ' + role;
+        wrap.innerHTML = '<span class="who">' + (role === 'user' ? '你' : '助手') + '</span>' +
+                         '<div class="ai-bubble">' + innerHtml + '</div>';
+        var thread = $('ai-thread');
+        thread.appendChild(wrap);
+        wrap.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return wrap;
+    }
+
+    function setAiBusy(busy) {
+        $('ai-input').disabled = busy;
+        $('ai-submit').disabled = busy;
+        Array.prototype.forEach.call($('ai-samples').querySelectorAll('.chip'), function (b) {
+            b.disabled = busy;
+        });
+    }
+
+    function askAi(question) {
+        if (!state.aiEnabled) return;
+        question = (question || '').trim();
+        if (!question) return;
+
+        appendAiMessage('user', esc(question));
+
+        var input = $('ai-input');
+        input.value = '';
+        setAiBusy(true);
+
+        // 先放一个「思考中」的占位，拿到结果后就地替换 —— 比清空整个列表再重画体验好，
+        // 也不会让用户在等待期间以为按钮没反应
+        var pending = appendAiMessage('assistant', '<span class="ai-dots">思考中</span>');
+
+        api('/ai/ask', {
+            method: 'POST',
+            body: {
+                question: question,
+                // 留空时不传这个字段（JSON.stringify 会丢掉 undefined），服务端据此开新对话
+                conversationId: state.aiConversationId || undefined
+            }
+        })
+            .then(function (data) {
+                state.aiConversationId = data.conversationId;
+                $('btn-ai-reset').classList.remove('hidden');
+                renderAiAnswer(pending, data);
+            })
+            .catch(function (err) {
+                // 后端在模型不可用时返回 503 + 明确原因，这里原样展示。
+                // **不能吞掉**：用户会把它误读成「我确实没有数据」。
+                pending.innerHTML = '<span class="who">助手</span>' +
+                                    '<div class="ai-err">' + esc(err.message) + '</div>';
+            })
+            .finally(function () {
+                setAiBusy(false);
+                input.focus();
+            });
+    }
+
+    function renderAiAnswer(node, data) {
+        var used = data.toolsUsed || [];
+        var trace = used.length
+            ? '查了 ' + used.map(function (t) { return '<span class="ai-tool">' + esc(t) + '</span>'; }).join('')
+            : '<span style="color:var(--warning)">这次没有查询数据</span>';
+
+        // degraded：有工具调用失败，模型是在数据不全的前提下作答的 —— 必须告诉用户，
+        // 否则他会以为这就是全部数据
+        var warn = data.degraded
+            ? '<div class="ai-warn">本次有工具调用失败，回答依据的数据可能不完整。</div>'
+            : '';
+
+        node.innerHTML = '<span class="who">助手</span>' +
+                         '<div class="ai-bubble">' + formatAnswer(data.answer) + '</div>' +
+                         warn +
+                         '<div class="ai-tools">' + trace + ' · ' + data.elapsedMs + ' ms</div>';
+    }
+
+    function resetAiConversation() {
+        state.aiConversationId = '';
+        $('ai-thread').innerHTML = '';
+        $('btn-ai-reset').classList.add('hidden');
+        toast('已开始新对话');
+    }
+
     /* --------------------------------------------------------------- 数据加载 --- */
 
     function loadSubjects() {
@@ -583,6 +714,18 @@
             else if (act === 'todo') changeStatus(id, 'TODO');
             else if (act === 'del') deleteTask(id);
         });
+
+        // AI 助手
+        $('ai-form').addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            askAi($('ai-input').value);
+        });
+        // 示例问题也是事件委托：它们是静态的，但和任务列表保持同一种写法更好维护
+        $('ai-samples').addEventListener('click', function (ev) {
+            var chip = ev.target.closest('.chip');
+            if (chip) askAi(chip.getAttribute('data-q'));
+        });
+        $('btn-ai-reset').addEventListener('click', resetAiConversation);
     }
 
     /* ------------------------------------------------------------------ 启动 --- */
